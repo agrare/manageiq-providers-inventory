@@ -1,6 +1,8 @@
-module ManagerRefresh
+require 'active_support/core_ext/object/blank' # present?
+
+module ManageIQ::Providers::Inventory
   class InventoryObjectLazy
-    include Vmdb::Logging
+    #include Vmdb::Logging
 
     attr_reader :ems_ref, :inventory_collection, :key, :default
 
@@ -23,7 +25,7 @@ module ManagerRefresh
 
     def to_raw_lazy_relation
       {
-        :type                      => "ManagerRefresh::InventoryObjectLazy",
+        :type                      => "ManageIQ::Providers::Inventory::InventoryObjectLazy",
         :inventory_collection_name => inventory_collection.name,
         :ems_ref                   => ems_ref,
         :key                       => key,

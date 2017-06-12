@@ -1,4 +1,8 @@
-module ManagerRefresh
+require 'active_support/core_ext/module'       # delegate
+require 'active_support/core_ext/object/blank' # present?
+require 'active_support/core_ext/object/try'   # try
+
+module ManageIQ::Providers::Inventory
   class InventoryObject
     attr_accessor :object, :id
     attr_reader :inventory_collection, :data
@@ -20,7 +24,7 @@ module ManagerRefresh
 
     def to_raw_lazy_relation
       {
-        :type                      => "ManagerRefresh::InventoryObjectLazy",
+        :type                      => "ManageIQ::Providers::Inventory::InventoryObjectLazy",
         :inventory_collection_name => inventory_collection.name,
         :ems_ref                   => manager_uuid,
       }
@@ -54,7 +58,7 @@ module ManagerRefresh
               # if record_id is missing
               attributes_for_saving[foreign_type] = record_id ? data[key].base_class_name : nil
             end
-          elsif data[key].kind_of?(::ManagerRefresh::InventoryObject)
+          elsif data[key].kind_of?(ManageIQ::Providers::Inventory::InventoryObject)
             # We have an association to fill but not an Activerecord association, so e.g. Ancestry, lets just load
             # it here. This way of storing ancestry is ineffective in DB call count, but RAM friendly
             attributes_for_saving[key] = data[key].base_class_name.constantize.find_by(:id => data[key].id)
@@ -129,8 +133,8 @@ module ManagerRefresh
     end
 
     def loadable?(value)
-      value.kind_of?(::ManagerRefresh::InventoryObjectLazy) || value.kind_of?(::ManagerRefresh::InventoryObject) ||
-        value.kind_of?(::ManagerRefresh::ApplicationRecordReference)
+      value.kind_of?(ManageIQ::Providers::Inventory::InventoryObjectLazy) || value.kind_of?(ManageIQ::Providers::Inventory::InventoryObject) ||
+        value.kind_of?(ManageIQ::Providers::Inventory::ApplicationRecordReference)
     end
   end
 end

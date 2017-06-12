@@ -1,4 +1,8 @@
-module ManagerRefresh
+require 'active_support/core_ext/module'                # delegate
+require 'active_support/core_ext/object/blank'          # present?
+require 'active_support/core_ext/hash/transform_values' # transform_values
+
+module ManageIQ::Providers::Inventory
   class InventoryCollection
     attr_accessor :saved, :references, :attribute_references, :data_collection_finalized, :all_manager_uuids
 
@@ -20,7 +24,7 @@ module ManagerRefresh
     #   @ems = ManageIQ::Providers::BaseManager.first
     #   puts @ems.vms.collect(&:ems_ref) # => []
     #   # Init InventoryCollection
-    #   vms_inventory_collection = ::ManagerRefresh::InventoryCollection.new(
+    #   vms_inventory_collection = ManageIQ::Providers::Inventory::InventoryCollection.new(
     #     :model_class => ManageIQ::Providers::CloudManager::Vm, :parent => @ems, :association => :vms
     #   )
     #
@@ -29,7 +33,7 @@ module ManagerRefresh
     #   vms_inventory_collection.build(:ems_ref => "vm2", :name => "vm2")
     #
     #   # Save InventoryCollection to the db
-    #   ManagerRefresh::SaveInventory.save_inventory(@ems, [vms_inventory_collection])
+    #   ManageIQ::Providers::Inventory::SaveInventory.save_inventory(@ems, [vms_inventory_collection])
     #
     #   # The result in the DB is that vm1 and vm2 were created
     #   puts @ems.vms.collect(&:ems_ref) # => ["vm1", "vm2"]
@@ -37,7 +41,7 @@ module ManagerRefresh
     #   ################################################################################################################
     #   # Example 1.2 In another refresh, vm1 does not exist anymore and vm3 was added
     #   # Init InventoryCollection
-    #   vms_inventory_collection = ::ManagerRefresh::InventoryCollection.new(
+    #   vms_inventory_collection = ManageIQ::Providers::Inventory::InventoryCollection.new(
     #     :model_class => ManageIQ::Providers::CloudManager::Vm, :parent => @ems, :association => :vms
     #   )
     #   # Fill InventoryCollection with data
@@ -45,7 +49,7 @@ module ManagerRefresh
     #   vms_inventory_collection.build(:ems_ref => "vm3", :name => "vm3")
     #
     #   # Save InventoryCollection to the db
-    #   ManagerRefresh::SaveInventory.save_inventory(@ems, [vms_inventory_collection])
+    #   ManageIQ::Providers::Inventory::SaveInventory.save_inventory(@ems, [vms_inventory_collection])
     #
     #   # The result in the DB is that vm1 was deleted, vm2 was updated and vm3 was created
     #   puts @ems.vms.collect(&:ems_ref) # => ["vm2", "vm3"]
@@ -107,7 +111,7 @@ module ManagerRefresh
     #          ActiveRecord association. That leads in N+1 queries in the default saving algorithm, so we can do better
     #          with custom saving for now. The InventoryCollection is defined as a custom dependencies processor,
     #          without its own :model_class and InventoryObjects inside:
-    #            ManagerRefresh::InventoryCollection.new({
+    #            ManageIQ::Providers::Inventory::InventoryCollection.new({
     #              :association       => :orchestration_stack_ancestry,
     #              :custom_save_block => orchestration_stack_ancestry_save_block,
     #              :dependency_attributes => {
@@ -296,7 +300,7 @@ module ManagerRefresh
     #          - :concurrent_safe_batch => Same as :concurrent_safe, but the upsert/update queries are executed as
     #            batched SQL queries, instead of sending 1 query per record.
     # @param parent_inventory_collections [Array] Array of symbols having a name of the
-    #        ManagerRefresh::InventoryCollection objects, that serve as parents to this InventoryCollection. Then this
+    #        ManageIQ::Providers::Inventory::InventoryCollection objects, that serve as parents to this InventoryCollection. Then this
     #        InventoryCollection completeness will be encapsulated by the parent_inventory_collections :manager_uuids
     #        instead of this InventoryCollection :manager_uuids.
     # @param manager_uuids [Array] Array of manager_uuids of the InventoryObjects we want to create/update/delete. Using
@@ -413,11 +417,11 @@ module ManagerRefresh
     end
 
     def from_raw_value(value, available_inventory_collections)
-      if value.kind_of?(Hash) && (value['type'] || value[:type]) == "ManagerRefresh::InventoryObjectLazy"
+      if value.kind_of?(Hash) && (value['type'] || value[:type]) == "ManageIQ::Providers::Inventory::InventoryObjectLazy"
         value.transform_keys!(&:to_s)
       end
 
-      if value.kind_of?(Hash) && value['type'] == "ManagerRefresh::InventoryObjectLazy"
+      if value.kind_of?(Hash) && value['type'] == "ManageIQ::Providers::Inventory::InventoryObjectLazy"
         inventory_collection = available_inventory_collections[value['inventory_collection_name'].try(:to_sym)]
         raise "Couldn't build lazy_link #{value} the inventory_collection_name was not found" if inventory_collection.blank?
         inventory_collection.lazy_find(value['ems_ref'], :key => value['key'], :default => value['default'])
@@ -625,12 +629,12 @@ module ManagerRefresh
     end
 
     def lazy_find(manager_uuid, key: nil, default: nil)
-      ::ManagerRefresh::InventoryObjectLazy.new(self, manager_uuid, :key => key, :default => default)
+      ManageIQ::Providers::Inventory::InventoryObjectLazy.new(self, manager_uuid, :key => key, :default => default)
     end
 
     def inventory_object_class
       @inventory_object_class ||= begin
-        klass = Class.new(::ManagerRefresh::InventoryObject)
+        klass = Class.new(ManageIQ::Providers::Inventory::InventoryObject)
         klass.add_attributes(inventory_object_attributes) if inventory_object_attributes
         klass
       end
@@ -977,14 +981,14 @@ module ManagerRefresh
 
       attributes = record.attributes.symbolize_keys
       attribute_references.each do |ref|
-        # We need to fill all references that are relations, we will use a ManagerRefresh::ApplicationRecordReference which
+        # We need to fill all references that are relations, we will use a ManageIQ::Providers::Inventory::ApplicationRecordReference which
         # can be used for filling a relation and we don't need to do any query here
         # TODO(lsmola) maybe loading all, not just referenced here? Otherwise this will have issue for db_cache_all
         # and find used in parser
         next unless (foreign_key = association_to_foreign_key_mapping[ref])
         base_class_name = attributes[association_to_foreign_type_mapping[ref].try(:to_sym)] || association_to_base_class_mapping[ref]
         id              = attributes[foreign_key.to_sym]
-        attributes[ref] = ManagerRefresh::ApplicationRecordReference.new(base_class_name, id)
+        attributes[ref] = ManageIQ::Providers::Inventory::ApplicationRecordReference.new(base_class_name, id)
       end
 
       db_data_index[index]    = new_inventory_object(attributes)
@@ -1039,11 +1043,11 @@ module ManagerRefresh
     end
 
     def inventory_object?(value)
-      value.kind_of?(::ManagerRefresh::InventoryObject)
+      value.kind_of?(ManageIQ::Providers::Inventory::InventoryObject)
     end
 
     def inventory_object_lazy?(value)
-      value.kind_of?(::ManagerRefresh::InventoryObjectLazy)
+      value.kind_of?(ManageIQ::Providers::Inventory::InventoryObjectLazy)
     end
 
     def validate_inventory_collection!
