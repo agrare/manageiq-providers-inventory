@@ -24,7 +24,7 @@ module ManageIQ::Providers::Inventory
 
     def to_raw_lazy_relation
       {
-        :type                      => "ManageIQ::Providers::Inventory::InventoryObjectLazy",
+        :type                      => "ManagerRefresh::InventoryObjectLazy",
         :inventory_collection_name => inventory_collection.name,
         :ems_ref                   => manager_uuid,
       }
